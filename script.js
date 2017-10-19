@@ -13,10 +13,13 @@ function zoomFiltering(divId) {
   .attr('transform', `translate(${centerX},${centerY})`);
 
   var origCircleScale1 = d3.scaleLinear().domain([.4,1]).range([0, 360]);
-  var origCircleScale2 = d3.scaleLinear().domain([.2,.8]).range([0, 340]);
+  var origCircleScale2 = d3.scaleLinear().domain([.2,.8]).range([0, 360]);
 
   let circleScale1 = origCircleScale1.copy();
   let circleScale2 = origCircleScale2.copy();
+
+  // the last midpoint of a zoom action
+  let lastMidPoint = 0;
 
   var prevTransform = d3.zoomIdentity;
 
@@ -71,10 +74,23 @@ function zoomFiltering(divId) {
     let d1 = circleScale1.invert(r1);
     let tn = r1 - d3.event.transform.k * circleScale1(d1);
 
+
+    let r2 = 360 * (zgamma2 / (2 * Math.PI));
+    let d2 = circleScale2.invert(r2);
+    let to = r2 - d3.event.transform.k * circleScale2(d2);
+
     prevTransform = d3.event.transform;
     prevTransform.x = tn;
+    prevTransform.y = to;
+
+    zoomBehavior.on('zoom', null);
+    circle.call(zoomBehavior.transform, prevTransform);
+    zoomBehavior.on('zoom', zoomed);
 
     circleScale1 = prevTransform.rescaleX(origCircleScale1);
+    circleScale2 = prevTransform.rescaleY(origCircleScale2);
+
+    lastMidPoint = (r1 + r2) / 2;
 
     drawAxis();
   }
@@ -126,11 +142,10 @@ function zoomFiltering(divId) {
   }
 
   function drawAxis() {
-    var ticks = circleScale1.ticks(10);
 
-    var axisScales = [circleScale1, circleScale2].sort(function(a,b) { 
-      return a.domain()[0] - b.domain()[0] 
-    });
+    var axisScales = [circleScale1, circleScale2];
+
+    var ticks = axisScales[0].ticks(10);
 
     var axisTexts = gAxis.selectAll('.axis-text')
       .data(ticks, function(d) { return d })
@@ -147,7 +162,29 @@ function zoomFiltering(divId) {
       .text(function(d) { return axisFormat(d); });
 
     svg.selectAll('.axis-text')
-      .attr('transform', function(d) { return `rotate(${circleScale1(d)})` });
+      .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
+
+    //// draw second axis
+    
+    ticks = axisScales[1].ticks(10);
+
+    axisTexts = gAxis.selectAll('.axis-2-text')
+      .data(ticks, function(d) { return d })
+  
+    axisTexts.exit().remove()
+
+    var axisFormat = d3.format(".2f");
+
+    axisTexts.enter()
+      .append('g')
+      .classed('axis-2-text', true)
+      .append('text')
+      .attr('x', radius + 50)
+      .style('fill', 'green')
+      .text(function(d) { return axisFormat(d); });
+
+    svg.selectAll('.axis-2-text')
+      .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
   }
 
   drawAxis();
