@@ -12,8 +12,11 @@ function zoomFiltering(divId) {
   var gAxis = svg.append('g')
   .attr('transform', `translate(${centerX},${centerY})`);
 
-  var circleScale1 = d3.scaleLinear().domain([.4,1]).range([0, 340]);
-  var circleScale2 = d3.scaleLinear().domain([.2,.8]).range([0, 340]);
+  var origCircleScale1 = d3.scaleLinear().domain([.4,1]).range([0, 360]);
+  var origCircleScale2 = d3.scaleLinear().domain([.2,.8]).range([0, 340]);
+
+  let circleScale1 = origCircleScale1.copy();
+  let circleScale2 = origCircleScale2.copy();
 
   var prevTransform = d3.zoomIdentity;
 
@@ -56,26 +59,31 @@ function zoomFiltering(divId) {
   circle.call(zoomBehavior);
 
   function zoomed() {
-    console.log('d3.event.transform', d3.event.transform);
+    /*
     circleScale1 = d3.event.transform.rescaleX(circleScale1);
     circleScale1 = d3.event.transform.rescaleY(circleScale2);
+    */
+    let pos = d3.mouse(svg.node());
+    let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
 
-    let dx = d3.event.transform.x - prevTransform.x;
-    let dy = d3.event.transform.y - prevTransform.y;
-    let dk = d3.event.transform.k - prevTransform.k;
+
+    let r1 = 360 * (zgamma1 / (2 * Math.PI));
+    let d1 = circleScale1.invert(r1);
+    let tn = r1 - d3.event.transform.k * circleScale1(d1);
 
     prevTransform = d3.event.transform;
+    prevTransform.x = tn;
 
-    console.log('dx:', dx, 'dy:', dy, 'dk:', dk);
-
+    circleScale1 = prevTransform.rescaleX(origCircleScale1);
 
     drawAxis();
   }
 
-
-  function positionLine(mouseX, mouseY) {
-    // Position the line so that it creates a chord which
-    // is bisected by the mouse position
+  function getChordEndpointAngles(mouseX, mouseY) {
+    /**
+     * Get the endpoints of the minimum coord spanning
+     * this mouse position
+     */
     var circleX = mouseX - centerX;
     var circleY = mouseY - centerY;
 
@@ -90,6 +98,20 @@ function zoomFiltering(divId) {
 
     var gamma1 = beta + alpha;
     var gamma2 = beta - alpha;
+
+    gamma1 = gamma1 < 0 ? 2 * Math.PI + gamma1 : gamma1;
+    gamma2 = gamma2 < 0 ? 2 * Math.PI + gamma2 : gamma2;
+
+    let x = [gamma1,gamma2].sort((a,b) => (+a) - (+b));
+    [gamma1, gamma2] = x;
+
+    return [gamma1, gamma2];
+  }
+
+  function positionLine(mouseX, mouseY) {
+    // Position the line so that it creates a chord which
+    // is bisected by the mouse position
+    var [gamma1, gamma2] = getChordEndpointAngles(mouseX, mouseY);
     
     var x1 = centerX + radius * Math.cos(gamma1);
     var x2 = centerX + radius * Math.cos(gamma2);
@@ -105,12 +127,10 @@ function zoomFiltering(divId) {
 
   function drawAxis() {
     var ticks = circleScale1.ticks(10);
-    console.log("ticks:", ticks)
 
     var axisScales = [circleScale1, circleScale2].sort(function(a,b) { 
       return a.domain()[0] - b.domain()[0] 
     });
-    console.log('axisScales:', axisScales[0].domain());
 
     var axisTexts = gAxis.selectAll('.axis-text')
       .data(ticks, function(d) { return d })
