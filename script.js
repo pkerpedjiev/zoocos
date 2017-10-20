@@ -4,6 +4,8 @@ function zoomFiltering(divId) {
   var centerX = width / 2;
   var centerY = height / 2;
 
+    let axisFormat = d3.format(".2f");
+
     var svg = d3.select(divId)
                 .append('svg')
                 .attr('width', width)
@@ -69,15 +71,13 @@ function zoomFiltering(divId) {
     let pos = d3.mouse(svg.node());
     let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
 
-
     let r1 = 360 * (zgamma1 / (2 * Math.PI));
     let d1 = circleScale1.invert(r1);
-    let tn = r1 - d3.event.transform.k * circleScale1(d1);
-
+    let tn = r1 - d3.event.transform.k * origCircleScale1(d1);
 
     let r2 = 360 * (zgamma2 / (2 * Math.PI));
     let d2 = circleScale2.invert(r2);
-    let to = r2 - d3.event.transform.k * circleScale2(d2);
+    let to = r2 - d3.event.transform.k * origCircleScale2(d2);
 
     prevTransform = d3.event.transform;
     prevTransform.x = tn;
@@ -152,7 +152,6 @@ function zoomFiltering(divId) {
   
     axisTexts.exit().remove()
 
-    var axisFormat = d3.format(".2f");
 
     axisTexts.enter()
       .append('g')
@@ -173,8 +172,6 @@ function zoomFiltering(divId) {
   
     axisTexts.exit().remove()
 
-    var axisFormat = d3.format(".2f");
-
     axisTexts.enter()
       .append('g')
       .classed('axis-2-text', true)
@@ -185,6 +182,26 @@ function zoomFiltering(divId) {
 
     svg.selectAll('.axis-2-text')
       .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
+
+    //// draw inner axis
+    
+    ticks = [0,30,60,90,120, 150, 180,210,240,270,300,330];
+
+    axisLines = gAxis.selectAll('.axis-line')
+      .data(ticks, function(d) { return d })
+  
+    axisLines.exit().remove()
+
+    axisLines.enter()
+      .append('g')
+      .classed('axis-line', true)
+      .append('line')
+      .attr('x1', radius - 20)
+      .attr('x2', radius)
+    .style('stroke', 'black')
+
+    svg.selectAll('.axis-line')
+      .attr('transform', function(d) { return `rotate(${d})` });
   }
 
   drawAxis();
