@@ -14,8 +14,8 @@ function zoomFiltering(divId) {
   var gAxis = svg.append('g')
   .attr('transform', `translate(${centerX},${centerY})`);
 
-  var origCircleScale1 = d3.scaleLinear().domain([.4,1]).range([0, 360]);
-  var origCircleScale2 = d3.scaleLinear().domain([.2,.8]).range([0, 360]);
+  var origCircleScale1 = d3.scaleLinear().domain([0,1]).range([0, 360]);
+  var origCircleScale2 = d3.scaleLinear().domain([0,1]).range([0, 360]);
 
   let circleScale1 = origCircleScale1.copy();
   let circleScale2 = origCircleScale2.copy();
@@ -201,6 +201,37 @@ function zoomFiltering(divId) {
     .style('stroke', 'black')
 
     svg.selectAll('.axis-line')
+      .attr('transform', function(d) { return `rotate(${d})` });
+
+    /// draw breakpoint
+    ticks = [lastMidPoint, (lastMidPoint + 180), circleScale1(0), circleScale2(0) ];
+
+    axisLines = gAxis.selectAll('.breakpoint-line')
+      .data(ticks, function(d) { return d })
+  
+    axisLines.exit().remove()
+
+    axisLines.enter()
+      .append('g')
+      .classed('breakpoint-line', true)
+      .append('line')
+      .attr('x1', radius - 20)
+      .attr('x2', radius)
+    .style('stroke-width', '4px')
+      .style('stroke', function(d,i) {
+        if (i == 0)
+          return 'green';
+        else if (i == 1)
+          return 'red';
+        /*
+        else if (i == 2)
+          return 'lightblue';
+        else if (i == 3)
+          return 'darkblue';
+          */
+      })
+
+    svg.selectAll('.breakpoint-line')
       .attr('transform', function(d) { return `rotate(${d})` });
   }
 
