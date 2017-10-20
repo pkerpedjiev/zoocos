@@ -152,6 +152,39 @@ function zoomFiltering(divId) {
   
     axisTexts.exit().remove()
 
+    let otherMidPoint = lastMidPoint + 180;
+    otherMidPoint = otherMidPoint > 360 ? otherMidPoint - 360 : otherMidPoint;
+
+    console.log('lastMidPoint:', lastMidPoint, otherMidPoint);
+
+    function isCloseToTop(point, midPoint) {
+      /*
+       * Check if a point has an unbstructed path to the top (270 degrees)
+       */
+
+      if (point > 90 && point <= 270) {
+        // left
+        if (midPoint > point && midPoint < 270)
+            // midPoint is between the point and the top
+            return false;
+      }
+
+      if (point <= 90) {
+        // right bottom
+        if (midPoint < point || midPoint > 270) {
+            return false;
+        }
+      }
+
+      if (point > 270) {
+        if ((midPoint < point && midPoint > 270))  {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
 
     axisTexts.enter()
       .append('g')
@@ -161,6 +194,18 @@ function zoomFiltering(divId) {
       .text(function(d) { return axisFormat(d); });
 
     svg.selectAll('.axis-text')
+      .style('visibility', function(d) {
+        let closeToTop = false;
+        let r = circleScale1(d);
+
+        if (isCloseToTop(r, lastMidPoint) &&
+            isCloseToTop(r, otherMidPoint)) {
+          closeToTop = true;  
+        }
+        
+        //console.log('d:', d, r, closeToTop);
+        return closeToTop ? 'hidden' : 'visible';
+      })
       .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
 
     //// draw second axis
@@ -176,11 +221,23 @@ function zoomFiltering(divId) {
       .append('g')
       .classed('axis-2-text', true)
       .append('text')
-      .attr('x', radius + 50)
+      .attr('x', radius + 20)
       .style('fill', 'green')
       .text(function(d) { return axisFormat(d); });
 
     svg.selectAll('.axis-2-text')
+      .style('visibility', function(d) {
+        let closeToTop = false;
+        let r = circleScale2(d);
+
+        if (isCloseToTop(r, lastMidPoint) &&
+            isCloseToTop(r, otherMidPoint)) {
+          closeToTop = true;  
+        }
+        
+        //console.log('d:', d, r, closeToTop);
+        return closeToTop ? 'visible' : 'hidden';
+      })
       .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
 
     //// draw inner axis
