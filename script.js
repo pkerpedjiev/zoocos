@@ -1,3 +1,5 @@
+var bedpeData = null;
+
 function zoomFiltering(divId) {
     var width = 550, height=400, radius = 100;
 
@@ -36,6 +38,15 @@ function zoomFiltering(divId) {
     .attr('stroke', "black")
   .style('visibility', 'hidden')
   ;
+
+  d3.tsv('data/sample.sv.bedpe', (error, data) => {
+    console.log('error:', error);
+    console.log('data:', data);
+
+    bedpeData = data;
+
+    drawData();
+  });
 
   var zoomBehavior = d3.zoom()
   .scaleExtent([1,10])
@@ -139,6 +150,45 @@ function zoomFiltering(divId) {
       .attr('x2', x2)
       .attr('y1', y1)
       .attr('y2', y2)
+  }
+
+  function drawData() {
+    let  scale = d3.scaleLinear([0,250000000]).range([0,1]);
+
+    let ribbon = d3.ribbon()
+      .radius(radius / 2)
+
+    console.log('bedpeData:', bedpeData);
+
+    if (!bedpeData || !bedpeData.length)
+      return;
+
+    let data = svg.selectAll('.ribbon')
+      .data(bedpeData)
+
+    console.log('data:', data);
+
+    data.enter()
+      .append('path')
+      .classed('.ribbon', true);
+
+    svg.selectAll('.ribbon')
+      .attr('d', function(d) {
+        let struct = {
+          source:
+            { 
+              startAngle: 0,
+              endAngle: 1,
+            },
+          target: 
+          {
+            startAngle: 0,
+            endAngle: 1,
+          }
+        };
+
+        return ribbon(struct);
+      });
   }
 
   function drawAxis() {
@@ -293,4 +343,5 @@ function zoomFiltering(divId) {
   }
 
   drawAxis();
+  drawData();
 }
