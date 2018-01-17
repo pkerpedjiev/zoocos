@@ -12,6 +12,8 @@ function zoomFiltering(divId) {
                 .append('svg')
                 .attr('width', width)
                 .attr('height', height)
+  var gRibbon = svg.append('g')
+  .attr('transform', `translate(${centerX},${centerY})`);
 
   var gAxis = svg.append('g')
   .attr('transform', `translate(${centerX},${centerY})`);
@@ -39,7 +41,7 @@ function zoomFiltering(divId) {
   .style('visibility', 'hidden')
   ;
 
-  d3.tsv('data/sample.sv.bedpe', (error, data) => {
+  d3.tsv('data/sample.small.sv.bedpe', (error, data) => {
     console.log('error:', error);
     console.log('data:', data);
 
@@ -81,6 +83,7 @@ function zoomFiltering(divId) {
     */
     let pos = d3.mouse(svg.node());
     let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
+    console.log('zgamma1', zgamma1, zgamma2);
 
     let r1 = 360 * (zgamma1 / (2 * Math.PI));
     let d1 = circleScale1.invert(r1);
@@ -104,6 +107,7 @@ function zoomFiltering(divId) {
     lastMidPoint = (r1 + r2) / 2;
 
     drawAxis();
+    drawData();
   }
 
   function getChordEndpointAngles(mouseX, mouseY) {
@@ -153,37 +157,51 @@ function zoomFiltering(divId) {
   }
 
   function drawData() {
-    let  scale = d3.scaleLinear([0,250000000]).range([0,1]);
+    let  scale = d3.scaleLinear().domain([0,250000000]).range([0,1]);
 
     let ribbon = d3.ribbon()
-      .radius(radius / 2)
+      .radius(radius)
 
-    console.log('bedpeData:', bedpeData);
 
     if (!bedpeData || !bedpeData.length)
       return;
 
-    let data = svg.selectAll('.ribbon')
+    console.log('bedpeData:', bedpeData);
+    let data = gRibbon.selectAll('.ribbon')
       .data(bedpeData)
 
     console.log('data:', data);
 
     data.enter()
       .append('path')
-      .classed('.ribbon', true);
+      .classed('ribbon', true);
 
-    svg.selectAll('.ribbon')
+    console.log('circleScale1', circleScale1.domain(), circleScale1.range());
+
+    gRibbon.selectAll('.ribbon')
       .attr('d', function(d) {
+        // console.log('s1', scale(d.start1));
+        // console.log('s2', scale(d.start2));
+
+        let midPoint1 = 2 * Math.PI * circleScale1(scale(d.start1)) / 360 + Math.PI / 2 ;
+        let midPoint2 = 2 * Math.PI * circleScale1(scale(d.start2)) / 360 + Math.PI / 2;
+
+        // console.log('midPoint1:', midPoint1);
+        // console.log('midPoint2:', midPoint2);
+
+        let delta = 0.05;
+
+        // console.log('d', d);
         let struct = {
           source:
             { 
-              startAngle: 0,
-              endAngle: 1,
+              startAngle: midPoint1 - delta,
+              endAngle: midPoint1 + delta,
             },
           target: 
           {
-            startAngle: 0,
-            endAngle: 1,
+            startAngle: midPoint2 - delta,
+            endAngle: midPoint2 + delta,
           }
         };
 
@@ -205,9 +223,9 @@ function zoomFiltering(divId) {
     let otherMidPoint = lastMidPoint + 180;
     otherMidPoint = otherMidPoint > 360 ? otherMidPoint - 360 : otherMidPoint;
 
-    console.log('lastMidPoint:', lastMidPoint, otherMidPoint);
+    //console.log('lastMidPoint:', lastMidPoint, otherMidPoint);
 
-    function isCloseToTop(point, midPoint) {
+    function isCloseTop(point, midPoint) {
       /*
        * Check if a point has an unbstructed path to the top (270 degrees)
        */
@@ -235,6 +253,20 @@ function zoomFiltering(divId) {
       return true;
     }
 
+    function isCloseToOrigin(point, midPoint) {
+      /*
+       * Check if a point has an unbstructed path to the origin (0 degrees)
+       */
+
+      if (point < 180) {
+        if (midPoint < point) return false;
+      if (point >= 180) 
+        if (midPoint > point) return false;
+      }
+
+      return true;
+    }
+
 
     axisTexts.enter()
       .append('g')
@@ -245,16 +277,16 @@ function zoomFiltering(divId) {
 
     svg.selectAll('.axis-text')
       .style('visibility', function(d) {
-        let closeToTop = false;
+        let closeToOrigin = false;
         let r = circleScale1(d);
 
-        if (isCloseToTop(r, lastMidPoint) &&
-            isCloseToTop(r, otherMidPoint)) {
-          closeToTop = true;  
+        if (isCloseToOrigin(r, lastMidPoint) &&
+            isCloseToOrigin(r, otherMidPoint)) {
+          closeToOrigin = true;  
         }
         
-        //console.log('d:', d, r, closeToTop);
-        return closeToTop ? 'hidden' : 'visible';
+        //console.log('d:', d, r, closeToOrigin);
+        return closeToOrigin ? 'hidden' : 'visible';
       })
       .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
 
@@ -277,16 +309,16 @@ function zoomFiltering(divId) {
 
     svg.selectAll('.axis-2-text')
       .style('visibility', function(d) {
-        let closeToTop = false;
+        let closeToOrigin = false;
         let r = circleScale2(d);
 
-        if (isCloseToTop(r, lastMidPoint) &&
-            isCloseToTop(r, otherMidPoint)) {
-          closeToTop = true;  
+        if (isCloseToOrigin(r, lastMidPoint) &&
+            isCloseToOrigin(r, otherMidPoint)) {
+          closeToOrigin = true;  
         }
         
-        //console.log('d:', d, r, closeToTop);
-        return closeToTop ? 'visible' : 'hidden';
+        //console.log('d:', d, r, closeToOrigin);
+        return closeToOrigin ? 'visible' : 'hidden';
       })
       .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
 
