@@ -27,6 +27,8 @@ function zoomFiltering(divId) {
   // the last midpoint of a zoom action
   let lastMidPoint = 0;
 
+  var dgamma1, dgamma2;
+
   var prevTransform = d3.zoomIdentity;
 
     // create 15 circles
@@ -36,14 +38,13 @@ function zoomFiltering(divId) {
     .attr('x1', 0)
     .attr('y1', 0)
     .attr('x2', width)
-  .attr('y2', height)
+    .attr('y2', height)
     .attr('stroke', "black")
-  .style('visibility', 'hidden')
-  ;
+    .style('visibility', 'hidden');
 
   d3.tsv('data/sample.small.sv.bedpe', (error, data) => {
-    console.log('error:', error);
-    console.log('data:', data);
+    //console.log('error:', error);
+    //console.log('data:', data);
 
     bedpeData = data;
 
@@ -54,7 +55,6 @@ function zoomFiltering(divId) {
   .scaleExtent([1,10])
   //.translateExtent([[0,1],[0,1]]);
   .on('zoom', zoomed);
-
     var circle = svg.selectAll('circle')
         .data(circles)
         .enter()
@@ -83,7 +83,11 @@ function zoomFiltering(divId) {
     */
     let pos = d3.mouse(svg.node());
     let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
-    console.log('zgamma1', zgamma1, zgamma2);
+    [dgamma1, dgamma2] = [zgamma1, zgamma2].map(x => 360 * x / (Math.PI * 2));
+
+    // console.log('zgamma1', zgamma1, zgamma2);
+    //
+    // console.log('domain1', circleScale1.domain(), circleScale2.domain());
 
     let r1 = 360 * (zgamma1 / (2 * Math.PI));
     let d1 = circleScale1.invert(r1);
@@ -166,17 +170,17 @@ function zoomFiltering(divId) {
     if (!bedpeData || !bedpeData.length)
       return;
 
-    console.log('bedpeData:', bedpeData);
+    //console.log('bedpeData:', bedpeData);
     let data = gRibbon.selectAll('.ribbon')
       .data(bedpeData)
 
-    console.log('data:', data);
+    // console.log('data:', data);
 
     data.enter()
       .append('path')
       .classed('ribbon', true);
 
-    console.log('circleScale1', circleScale1.domain(), circleScale1.range());
+    // console.log('circleScale1', circleScale1.domain(), circleScale1.range());
 
     gRibbon.selectAll('.ribbon')
       .attr('d', function(d) {
@@ -223,9 +227,51 @@ function zoomFiltering(divId) {
     let otherMidPoint = lastMidPoint + 180;
     otherMidPoint = otherMidPoint > 360 ? otherMidPoint - 360 : otherMidPoint;
 
-    //console.log('lastMidPoint:', lastMidPoint, otherMidPoint);
+    /**
+     * Check if the midpoint is between the shortest path between a source and 
+     * target on a circle. All values are in degrees.
+     */
+    function isBetweenOnCircle(angle1, midpoint, angle2 ) {
+      let [a1,a2] = [angle1, angle2].sort((a,b) => (+a) - (+b) );
+      /*
+      console.log('angle2:', angle2);
+      console.log('[angle1,angle2].sort', [angle1, angle2].sort());
+      console.log('a1,a2', a1,a2, a1 < a2);
+      */
 
-    function isCloseTop(point, midPoint) {
+      if (a2 - a1 <= 180) {
+        // shortest path doesn't cross the origin
+        if (a1 < midpoint && midpoint < a2) {
+          // midpoint bisects shortest path
+          return true;
+        }
+      } else {
+        // the shortest path between these two crosses the
+        // origin
+        if (midpoint < a1)
+          return true;
+        if (midpoint > a2)
+          return true;
+      }
+
+      return false;
+    }
+
+    function isCloseToDGamma1(point, midPoint) {
+      /*
+       * Check if a point has an unbstructed path to the position of
+       * DGamma1(the lower endpoint of the zoom target).
+       */
+
+      // console.log('point:', point, 'midpoint', midPoint, 'dGamma1', dgamma1);
+      let ret = isBetweenOnCircle(point, midPoint, dgamma1);
+      // console.log('ret:', ret);
+
+      return !ret;
+    }
+
+
+    function isCloseToTop(point, midPoint) {
       /*
        * Check if a point has an unbstructed path to the top (270 degrees)
        */
@@ -256,15 +302,24 @@ function zoomFiltering(divId) {
     function isCloseToOrigin(point, midPoint) {
       /*
        * Check if a point has an unbstructed path to the origin (0 degrees)
+       *
+       * This is used to check whether to show axis tick marks. Point is the angle
+       * position of the tick mark (e.g. 0.9 at position 140 degrees) and midpoint
+       * is one of the breakpoints of the circle.
        */
 
+      let ret = true;
+
       if (point < 180) {
-        if (midPoint < point) return false;
-      if (point >= 180) 
-        if (midPoint > point) return false;
+        if (midPoint < point) ret = false;
+      }
+      else if (point >= 180)  {
+        if (midPoint > point) ret = false;
       }
 
-      return true;
+      // console.log('point', point, 'midPoint', midPoint, 'ret:', ret);
+
+      return ret;
     }
 
 
@@ -277,16 +332,16 @@ function zoomFiltering(divId) {
 
     svg.selectAll('.axis-text')
       .style('visibility', function(d) {
-        let closeToOrigin = false;
+        let closeToDGamma1 = false;
         let r = circleScale1(d);
 
-        if (isCloseToOrigin(r, lastMidPoint) &&
-            isCloseToOrigin(r, otherMidPoint)) {
-          closeToOrigin = true;  
+        if (isCloseToDGamma1(r, lastMidPoint) &&
+            isCloseToDGamma1(r, otherMidPoint)) {
+          closeToDGamma1 = true;  
         }
         
-        //console.log('d:', d, r, closeToOrigin);
-        return closeToOrigin ? 'hidden' : 'visible';
+        console.log('d:', d, r, lastMidPoint, dgamma1, closeToDGamma1);
+        return closeToDGamma1 ? 'visible' : 'hidden';
       })
       .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
 
@@ -309,16 +364,16 @@ function zoomFiltering(divId) {
 
     svg.selectAll('.axis-2-text')
       .style('visibility', function(d) {
-        let closeToOrigin = false;
+        let closeToDGamma1 = false;
         let r = circleScale2(d);
 
-        if (isCloseToOrigin(r, lastMidPoint) &&
-            isCloseToOrigin(r, otherMidPoint)) {
-          closeToOrigin = true;  
+        if (isCloseToDGamma1(r, lastMidPoint) &&
+            isCloseToDGamma1(r, otherMidPoint)) {
+          closeToDGamma1 = true;  
         }
         
-        //console.log('d:', d, r, closeToOrigin);
-        return closeToOrigin ? 'visible' : 'hidden';
+        //console.log('d2:', d, r, closeToDGamma1);
+        return closeToDGamma1 ? 'hidden' : 'visible';
       })
       .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
 
