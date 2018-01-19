@@ -1,5 +1,48 @@
 var bedpeData = null;
 
+/**
+ * Calculate the distance between two points
+ * on a circle.
+ *
+ * @param {Number} a: Point 1
+ * @param {Number} b: Point 2
+ * @return {Number} The distance between a and b on a circle
+ */
+function circleDistanceTo(a, b) {
+  const ad = Math.abs(a-b);
+  return Math.min(ad, Math.abs(360 - ad));
+}
+
+  /**
+   * Check if the midpoint is between the shortest path between a source and 
+   * target on a circle. All values are in degrees.
+   */
+  function isBetweenOnCircle(angle1, midpoint, angle2 ) {
+    let [a1,a2] = [angle1, angle2].sort((a,b) => (+a) - (+b) );
+    /*
+    console.log('angle2:', angle2);
+    console.log('[angle1,angle2].sort', [angle1, angle2].sort());
+    console.log('a1,a2', a1,a2, a1 < a2);
+    */
+
+    if (a2 - a1 <= 180) {
+      // shortest path doesn't cross the origin
+      if (a1 < midpoint && midpoint < a2) {
+        // midpoint bisects shortest path
+        return true;
+      }
+    } else {
+      // the shortest path between these two crosses the
+      // origin
+      if (midpoint < a1)
+        return true;
+      if (midpoint > a2)
+        return true;
+    }
+
+    return false;
+  }
+
 function zoomFiltering(divId) {
     var width = 550, height=400, radius = 100;
 
@@ -23,6 +66,8 @@ function zoomFiltering(divId) {
 
   let circleScale1 = origCircleScale1.copy();
   let circleScale2 = origCircleScale2.copy();
+
+  var breakpoint1, breakpoint2;
 
   // the last midpoint of a zoom action
   let lastMidPoint = 0;
@@ -110,6 +155,16 @@ function zoomFiltering(divId) {
 
     lastMidPoint = (r1 + r2) / 2;
 
+    breakpoint1 = lastMidPoint;
+    breakpoint2 = lastMidPoint + 180;
+
+    if (isBetweenOnCircle(breakpoint1, dgamma1, 0) ||
+        isBetweenOnCircle(breakpoint1, dgamma2, 0)) {
+        breakpoint2 = 0;
+    } else {
+      breakpoint1 = 0;
+    }
+
     drawAxis();
     drawData();
   }
@@ -166,7 +221,6 @@ function zoomFiltering(divId) {
     let ribbon = d3.ribbon()
       .radius(radius)
 
-
     if (!bedpeData || !bedpeData.length)
       return;
 
@@ -181,11 +235,13 @@ function zoomFiltering(divId) {
       .classed('ribbon', true);
 
     // console.log('circleScale1', circleScale1.domain(), circleScale1.range());
-
     gRibbon.selectAll('.ribbon')
       .attr('d', function(d) {
         // console.log('s1', scale(d.start1));
         // console.log('s2', scale(d.start2));
+        
+        // check if either end of this arc is in the visible domain
+        // of a scale and if it is, draw it using that scale
 
         let midPoint1 = 2 * Math.PI * circleScale1(scale(d.start1)) / 360 + Math.PI / 2 ;
         let midPoint2 = 2 * Math.PI * circleScale1(scale(d.start2)) / 360 + Math.PI / 2;
@@ -224,38 +280,6 @@ function zoomFiltering(divId) {
   
     axisTexts.exit().remove()
 
-    let otherMidPoint = lastMidPoint + 180;
-    otherMidPoint = otherMidPoint > 360 ? otherMidPoint - 360 : otherMidPoint;
-
-    /**
-     * Check if the midpoint is between the shortest path between a source and 
-     * target on a circle. All values are in degrees.
-     */
-    function isBetweenOnCircle(angle1, midpoint, angle2 ) {
-      let [a1,a2] = [angle1, angle2].sort((a,b) => (+a) - (+b) );
-      /*
-      console.log('angle2:', angle2);
-      console.log('[angle1,angle2].sort', [angle1, angle2].sort());
-      console.log('a1,a2', a1,a2, a1 < a2);
-      */
-
-      if (a2 - a1 <= 180) {
-        // shortest path doesn't cross the origin
-        if (a1 < midpoint && midpoint < a2) {
-          // midpoint bisects shortest path
-          return true;
-        }
-      } else {
-        // the shortest path between these two crosses the
-        // origin
-        if (midpoint < a1)
-          return true;
-        if (midpoint > a2)
-          return true;
-      }
-
-      return false;
-    }
 
     function isCloseToDGamma1(point, midPoint) {
       /*
@@ -270,59 +294,6 @@ function zoomFiltering(divId) {
       return !ret;
     }
 
-
-    function isCloseToTop(point, midPoint) {
-      /*
-       * Check if a point has an unbstructed path to the top (270 degrees)
-       */
-
-      if (point > 90 && point <= 270) {
-        // left
-        if (midPoint > point && midPoint < 270)
-            // midPoint is between the point and the top
-            return false;
-      }
-
-      if (point <= 90) {
-        // right bottom
-        if (midPoint < point || midPoint > 270) {
-            return false;
-        }
-      }
-
-      if (point > 270) {
-        if ((midPoint < point && midPoint > 270))  {
-          return false;
-        }
-      }
-
-      return true;
-    }
-
-    function isCloseToOrigin(point, midPoint) {
-      /*
-       * Check if a point has an unbstructed path to the origin (0 degrees)
-       *
-       * This is used to check whether to show axis tick marks. Point is the angle
-       * position of the tick mark (e.g. 0.9 at position 140 degrees) and midpoint
-       * is one of the breakpoints of the circle.
-       */
-
-      let ret = true;
-
-      if (point < 180) {
-        if (midPoint < point) ret = false;
-      }
-      else if (point >= 180)  {
-        if (midPoint > point) ret = false;
-      }
-
-      // console.log('point', point, 'midPoint', midPoint, 'ret:', ret);
-
-      return ret;
-    }
-
-
     axisTexts.enter()
       .append('g')
       .classed('axis-text', true)
@@ -330,17 +301,19 @@ function zoomFiltering(divId) {
       .attr('x', radius)
       .text(function(d) { return axisFormat(d); });
 
+    console.log('bp1', breakpoint1, 'bp2', breakpoint2);
+
     svg.selectAll('.axis-text')
       .style('visibility', function(d) {
         let closeToDGamma1 = false;
         let r = circleScale1(d);
 
-        if (isCloseToDGamma1(r, lastMidPoint) &&
-            isCloseToDGamma1(r, otherMidPoint)) {
+        if (isCloseToDGamma1(r, breakpoint1) &&
+            isCloseToDGamma1(r, breakpoint2)) {
           closeToDGamma1 = true;  
         }
         
-        console.log('d:', d, r, lastMidPoint, dgamma1, closeToDGamma1);
+        //console.log('d:', d, r, lastMidPoint, dgamma1, closeToDGamma1);
         return closeToDGamma1 ? 'visible' : 'hidden';
       })
       .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
@@ -367,8 +340,8 @@ function zoomFiltering(divId) {
         let closeToDGamma1 = false;
         let r = circleScale2(d);
 
-        if (isCloseToDGamma1(r, lastMidPoint) &&
-            isCloseToDGamma1(r, otherMidPoint)) {
+        if (isCloseToDGamma1(r, breakpoint1) &&
+            isCloseToDGamma1(r, breakpoint2)) {
           closeToDGamma1 = true;  
         }
         
@@ -398,8 +371,9 @@ function zoomFiltering(divId) {
       .attr('transform', function(d) { return `rotate(${d})` });
 
     /// draw breakpoint
-    ticks = [lastMidPoint, (lastMidPoint + 180), circleScale1(0), circleScale2(0) ];
+    ticks = [breakpoint1, breakpoint2];
 
+    console.log('ticks:', ticks);
     axisLines = gAxis.selectAll('.breakpoint-line')
       .data(ticks, function(d) { return d })
   
@@ -425,8 +399,8 @@ function zoomFiltering(divId) {
           */
       })
 
-    svg.selectAll('.breakpoint-line')
-      .attr('transform', function(d) { return `rotate(${d})` });
+      svg.selectAll('.breakpoint-line')
+        .attr('transform', function(d) { return `rotate(${d})` });
   }
 
   drawAxis();
