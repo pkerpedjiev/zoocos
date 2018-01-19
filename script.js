@@ -67,6 +67,9 @@ function zoomFiltering(divId) {
   let circleScale1 = origCircleScale1.copy();
   let circleScale2 = origCircleScale2.copy();
 
+  let clippedScale1 = origCircleScale1.copy();
+  let clippedScale2 = origCircleScale2.copy();
+
   var breakpoint1, breakpoint2;
 
   // the last midpoint of a zoom action
@@ -158,12 +161,29 @@ function zoomFiltering(divId) {
     breakpoint1 = lastMidPoint;
     breakpoint2 = lastMidPoint + 180;
 
+    var nonZeroBreak = null;
+
     if (isBetweenOnCircle(breakpoint1, dgamma1, 0) ||
         isBetweenOnCircle(breakpoint1, dgamma2, 0)) {
-        breakpoint2 = 0;
+      breakpoint2 = 0;
+      nonZeroBreak = breakpoint1;
     } else {
       breakpoint1 = 0;
+      nonZeroBreak = breakpoint2;
     }
+
+    nonZeroBreak = Math.min(nonZeroBreak, Math.abs(2 * Math.PI - nonZeroBreak));
+
+    console.log('nzb:', nonZeroBreak);
+
+    clippedScale1 = circleScale1.copy();
+    clippedScale2 = circleScale2.copy();
+
+    clippedScale1.range([0, nonZeroBreak]);
+    clippedScale2.range([nonZeroBreak, 360]);
+
+    clippedScale1.domain(clippedScale1.range().map(circleScale1.invert));
+    clippedScale2.domain(clippedScale2.range().map(circleScale2.invert));
 
     drawAxis();
     drawData();
@@ -269,18 +289,6 @@ function zoomFiltering(divId) {
       });
   }
 
-  function drawAxis() {
-
-    var axisScales = [circleScale1, circleScale2];
-
-    var ticks = axisScales[0].ticks(10);
-
-    var axisTexts = gAxis.selectAll('.axis-text')
-      .data(ticks, function(d) { return d })
-  
-    axisTexts.exit().remove()
-
-
     function isCloseToDGamma1(point, midPoint) {
       /*
        * Check if a point has an unbstructed path to the position of
@@ -294,6 +302,14 @@ function zoomFiltering(divId) {
       return !ret;
     }
 
+  function drawAxis() {
+
+    var ticks = clippedScale1.ticks(5);
+
+    var axisTexts = gAxis.selectAll('.axis-text')
+      .data(ticks, function(d) { return d })
+  
+    axisTexts.exit().remove()
     axisTexts.enter()
       .append('g')
       .classed('axis-text', true)
@@ -304,23 +320,11 @@ function zoomFiltering(divId) {
     console.log('bp1', breakpoint1, 'bp2', breakpoint2);
 
     svg.selectAll('.axis-text')
-      .style('visibility', function(d) {
-        let closeToDGamma1 = false;
-        let r = circleScale1(d);
-
-        if (isCloseToDGamma1(r, breakpoint1) &&
-            isCloseToDGamma1(r, breakpoint2)) {
-          closeToDGamma1 = true;  
-        }
-        
-        //console.log('d:', d, r, lastMidPoint, dgamma1, closeToDGamma1);
-        return closeToDGamma1 ? 'visible' : 'hidden';
-      })
-      .attr('transform', function(d) { return `rotate(${axisScales[0](d)})` });
+      .attr('transform', function(d) { return `rotate(${clippedScale1(d)})` });
 
     //// draw second axis
     
-    ticks = axisScales[1].ticks(10);
+    var ticks = clippedScale2.ticks(5);
 
     axisTexts = gAxis.selectAll('.axis-2-text')
       .data(ticks, function(d) { return d })
@@ -348,7 +352,7 @@ function zoomFiltering(divId) {
         //console.log('d2:', d, r, closeToDGamma1);
         return closeToDGamma1 ? 'hidden' : 'visible';
       })
-      .attr('transform', function(d) { return `rotate(${axisScales[1](d)})` });
+      .attr('transform', function(d) { return `rotate(${clippedScale2(d)})` });
 
     //// draw inner axis
     
