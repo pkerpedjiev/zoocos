@@ -19,11 +19,6 @@ function circleDistanceTo(a, b) {
    */
   function isBetweenOnCircle(angle1, midpoint, angle2 ) {
     let [a1,a2] = [angle1, angle2].sort((a,b) => (+a) - (+b) );
-    /*
-    console.log('angle2:', angle2);
-    console.log('[angle1,angle2].sort', [angle1, angle2].sort());
-    console.log('a1,a2', a1,a2, a1 < a2);
-    */
 
     if (a2 - a1 <= 180) {
       // shortest path doesn't cross the origin
@@ -44,7 +39,7 @@ function circleDistanceTo(a, b) {
   }
 
 function zoomFiltering(divId) {
-    var width = 550, height=400, radius = 100;
+    var width = 550, height=400, radius = 150;
 
   var centerX = width / 2;
   var centerY = height / 2;
@@ -91,8 +86,6 @@ function zoomFiltering(divId) {
     .style('visibility', 'hidden');
 
   d3.tsv('data/sample.small.sv.bedpe', (error, data) => {
-    //console.log('error:', error);
-    //console.log('data:', data);
 
     bedpeData = data;
 
@@ -130,6 +123,16 @@ function zoomFiltering(divId) {
     circleScale1 = d3.event.transform.rescaleY(circleScale2);
     */
     let pos = d3.mouse(svg.node());
+    const zdiff = d3.event.transform.k - prevTransform.k;
+
+    if (zdiff === 0) {
+      // this is a translation rather than a zoom
+      prevTransform = d3.event.transform;
+      return;
+    }
+
+    console.log('zdiff:', zdiff);
+
     let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
     [dgamma1, dgamma2] = [zgamma1, zgamma2].map(x => 360 * x / (Math.PI * 2));
 
@@ -137,13 +140,16 @@ function zoomFiltering(divId) {
     //
     // console.log('domain1', circleScale1.domain(), circleScale2.domain());
 
+    // set the current zoom position to one end of the zoom chord
     let r1 = 360 * (zgamma1 / (2 * Math.PI));
     let d1 = circleScale1.invert(r1);
     let tn = r1 - d3.event.transform.k * origCircleScale1(d1);
 
+    // set the other zoom position to the other end of the zoom chord
     let r2 = 360 * (zgamma2 / (2 * Math.PI));
     let d2 = circleScale2.invert(r2);
     let to = r2 - d3.event.transform.k * origCircleScale2(d2);
+
 
     prevTransform = d3.event.transform;
     prevTransform.x = tn;
@@ -171,10 +177,6 @@ function zoomFiltering(divId) {
       breakpoint1 = 0;
       nonZeroBreak = breakpoint2;
     }
-
-    nonZeroBreak = Math.min(nonZeroBreak, Math.abs(2 * Math.PI - nonZeroBreak));
-
-    console.log('nzb:', nonZeroBreak);
 
     clippedScale1 = circleScale1.copy();
     clippedScale2 = circleScale2.copy();
@@ -244,34 +246,72 @@ function zoomFiltering(divId) {
     if (!bedpeData || !bedpeData.length)
       return;
 
-    //console.log('bedpeData:', bedpeData);
     let data = gRibbon.selectAll('.ribbon')
       .data(bedpeData)
-
-    // console.log('data:', data);
 
     data.enter()
       .append('path')
       .classed('ribbon', true);
 
-    // console.log('circleScale1', circleScale1.domain(), circleScale1.range());
     gRibbon.selectAll('.ribbon')
       .attr('d', function(d) {
-        // console.log('s1', scale(d.start1));
-        // console.log('s2', scale(d.start2));
-        
         // check if either end of this arc is in the visible domain
         // of a scale and if it is, draw it using that scale
 
-        let midPoint1 = 2 * Math.PI * circleScale1(scale(d.start1)) / 360 + Math.PI / 2 ;
-        let midPoint2 = 2 * Math.PI * circleScale1(scale(d.start2)) / 360 + Math.PI / 2;
+        const scaledStart1 = scale(d.start1)
+        const scaledStart2 = scale(d.start2)
 
-        // console.log('midPoint1:', midPoint1);
-        // console.log('midPoint2:', midPoint2);
+        const domain1 = clippedScale1.domain();
+        const domain2 = clippedScale2.domain();
+
+        let midPoint1 = null;
+        let midPoint2 = null;
+
+        // draw the arcs if they are within the scale's domains
+        // e.g. if both ends should be visible on the track
+        if (domain1[0] <= scaledStart1 && scaledStart1 <= domain1[1]) {
+          midPoint1 = 2 * Math.PI * circleScale1(scale(d.start1)) / 360 + Math.PI / 2 ;
+        } if (domain2[0] <= scaledStart1 && scaledStart1 <= domain2[1]) {
+          midPoint1 = 2 * Math.PI * circleScale2(scale(d.start1)) / 360 + Math.PI / 2 ;
+        } 
+
+        if (domain1[0] <= scaledStart2 && scaledStart2 <= domain1[1])
+          midPoint2 = 2 * Math.PI * circleScale1(scale(d.start2)) / 360 + Math.PI / 2 ;
+        if (domain2[0] <= scaledStart2 && scaledStart2 <= domain2[1])
+          midPoint2 = 2 * Math.PI * circleScale2(scale(d.start2)) / 360 + Math.PI / 2 ;
+
+
+        let midPoint1End = null;
+        let midPoint2End = null;
+
+        if (midPoint1 == null) {
+          // one end of the data is off the scale
+          if (scaledStart1 <= domain1[0]) {
+            // the first end of the segment is off the lower end of the
+            // scale
+            midPoint1 = 2 * Math.PI * clippedScale1.range()[0] / 360 + Math.PI / 2;
+            midPoint1End = 0;
+          } else {
+            midPoint1 = 2 * Math.PI * clippedScale1.range()[1] / 360 + Math.PI / 2;
+            midPoint1End = 1;
+          }
+        }
+
+        if (midPoint2 == null) {
+          // one end of the data is off the scale
+          if (scaledStart2 <= domain1[0]) {
+            // the first end of the segment is off the lower end of the
+            // scale
+            midPoint2 = 2 * Math.PI * clippedScale1.range()[0] / 360 + Math.PI / 2;
+            midPoint2End = 0;
+          } else {
+            midPoint2 = 2 * Math.PI * clippedScale1.range()[1] / 360 + Math.PI / 2;
+            midPoint2End = 1;
+          }
+        }
 
         let delta = 0.05;
 
-        // console.log('d', d);
         let struct = {
           source:
             { 
@@ -295,9 +335,7 @@ function zoomFiltering(divId) {
        * DGamma1(the lower endpoint of the zoom target).
        */
 
-      // console.log('point:', point, 'midpoint', midPoint, 'dGamma1', dgamma1);
       let ret = isBetweenOnCircle(point, midPoint, dgamma1);
-      // console.log('ret:', ret);
 
       return !ret;
     }
@@ -316,8 +354,6 @@ function zoomFiltering(divId) {
       .append('text')
       .attr('x', radius)
       .text(function(d) { return axisFormat(d); });
-
-    console.log('bp1', breakpoint1, 'bp2', breakpoint2);
 
     svg.selectAll('.axis-text')
       .attr('transform', function(d) { return `rotate(${clippedScale1(d)})` });
@@ -340,21 +376,9 @@ function zoomFiltering(divId) {
       .text(function(d) { return axisFormat(d); });
 
     svg.selectAll('.axis-2-text')
-      .style('visibility', function(d) {
-        let closeToDGamma1 = false;
-        let r = circleScale2(d);
-
-        if (isCloseToDGamma1(r, breakpoint1) &&
-            isCloseToDGamma1(r, breakpoint2)) {
-          closeToDGamma1 = true;  
-        }
-        
-        //console.log('d2:', d, r, closeToDGamma1);
-        return closeToDGamma1 ? 'hidden' : 'visible';
-      })
       .attr('transform', function(d) { return `rotate(${clippedScale2(d)})` });
 
-    //// draw inner axis
+    // draw inner axis
     
     ticks = [0,30,60,90,120, 150, 180,210,240,270,300,330];
 
@@ -377,7 +401,6 @@ function zoomFiltering(divId) {
     /// draw breakpoint
     ticks = [breakpoint1, breakpoint2];
 
-    console.log('ticks:', ticks);
     axisLines = gAxis.selectAll('.breakpoint-line')
       .data(ticks, function(d) { return d })
   
