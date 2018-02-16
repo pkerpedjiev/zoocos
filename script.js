@@ -91,8 +91,6 @@ function zoomFiltering(divId) {
     .style('visibility', 'hidden');
 
   d3.tsv('data/sample.small.sv.bedpe', (error, data) => {
-    //console.log('error:', error);
-    //console.log('data:', data);
 
     bedpeData = data;
 
@@ -133,10 +131,6 @@ function zoomFiltering(divId) {
     let [zgamma1, zgamma2] = getChordEndpointAngles(pos[0], pos[1]);
     [dgamma1, dgamma2] = [zgamma1, zgamma2].map(x => 360 * x / (Math.PI * 2));
 
-    // console.log('zgamma1', zgamma1, zgamma2);
-    //
-    // console.log('domain1', circleScale1.domain(), circleScale2.domain());
-
     let r1 = 360 * (zgamma1 / (2 * Math.PI));
     let d1 = circleScale1.invert(r1);
     let tn = r1 - d3.event.transform.k * origCircleScale1(d1);
@@ -172,9 +166,7 @@ function zoomFiltering(divId) {
       nonZeroBreak = breakpoint2;
     }
 
-    nonZeroBreak = Math.min(nonZeroBreak, Math.abs(2 * Math.PI - nonZeroBreak));
-
-    console.log('nzb:', nonZeroBreak);
+    //nonZeroBreak = Math.min(nonZeroBreak, Math.abs(260 - nonZeroBreak));
 
     clippedScale1 = circleScale1.copy();
     clippedScale2 = circleScale2.copy();
@@ -262,26 +254,87 @@ function zoomFiltering(divId) {
         
         // check if either end of this arc is in the visible domain
         // of a scale and if it is, draw it using that scale
+        const [start1, start2] = [scale(d.start1), scale(d.start2)].sort((a,b) => a - b);
 
-        let midPoint1 = 2 * Math.PI * circleScale1(scale(d.start1)) / 360 + Math.PI / 2 ;
-        let midPoint2 = 2 * Math.PI * circleScale1(scale(d.start2)) / 360 + Math.PI / 2;
+        const scales = [clippedScale1, clippedScale2];
+        const domains = scales.map(x => x.domain());
 
-        // console.log('midPoint1:', midPoint1);
-        // console.log('midPoint2:', midPoint2);
+        let delta1 = 0.05;
+        let delta2 = 0.05;
 
-        let delta = 0.05;
+        let found1 = false, found2 = false;
+
+        let midPoint1 = 0, midPoint2 = 0;
+
+        // we're going to keep the closest domain endpoint to show where
+        // we're going to draw these arcs
+        let closest1 = 1000000000;
+        let closest2 = 1000000000;
+        let closestPos1 = 0;
+        let closestPos2 = 0;
+        let closestScale1 = 0;
+        let closestScale2 = 0;
+
+        for (let i = 0; i < domains.length; i++) {
+          // see if we can place each endpoint within one of the arcs
+          // in this scenario, each scale's domain represents a segment
+          // on the circular plot
+          if (domains[i][0] <= start1 && start1 <= domains[i][1]) {
+            midPoint1 = 2 * Math.PI * scales[i](start1) / 360 + Math.PI / 2 ;
+
+            found1 = true;
+          }
+
+          if (domains[i][0] <= start2 && start2 <= domains[i][1]) {
+            midPoint2 = 2 * Math.PI * scales[i](start2) / 360 + Math.PI / 2;
+
+            found2 = true;
+          }
+
+          if (Math.abs(domains[i][0] - start1) < closest1) {
+            closest1 = Math.abs(domains[i][0] - start1);
+            closestPos1 = domains[i][0];
+            closestScale1 = i;
+          }
+
+          if (Math.abs(domains[i][1] - start1) < closest1) {
+            closest1 = Math.abs(domains[i][1] - start1);
+            closestPos1 = domains[i][1];
+            closestScale1 = i;
+          }
+
+          if (Math.abs(domains[i][0] - start2) < closest2) {
+            closest2 = Math.abs(domains[i][0] - start2);
+            closestPos2 = domains[i][0];
+            closestScale2 = i;
+          }
+          if (Math.abs(domains[i][1] - start2) < closest2) {
+            closest2 = Math.abs(domains[i][1] - start2);
+            closestPos2 = domains[i][1];
+            closestScale2 = i;
+          }
+        }
+
+        if (!found1) {
+          midPoint1 = 2 * Math.PI * scales[closestScale1](closestPos1) / 360 + Math.PI / 2;
+        }
+
+        if (!found2) {
+          midPoint2 = 2 * Math.PI * scales[closestScale2](closestPos2) / 360 + Math.PI / 2;
+          console.log('closestScale', closestScale2, closestPos2, scales[closestScale2](closestPos2));
+        }
 
         // console.log('d', d);
         let struct = {
           source:
             { 
-              startAngle: midPoint1 - delta,
-              endAngle: midPoint1 + delta,
+              startAngle: midPoint1 - delta1,
+              endAngle: midPoint1 + delta1,
             },
           target: 
           {
-            startAngle: midPoint2 - delta,
-            endAngle: midPoint2 + delta,
+            startAngle: midPoint2 - delta2,
+            endAngle: midPoint2 + delta2,
           }
         };
 
@@ -317,7 +370,7 @@ function zoomFiltering(divId) {
       .attr('x', radius)
       .text(function(d) { return axisFormat(d); });
 
-    console.log('bp1', breakpoint1, 'bp2', breakpoint2);
+    // console.log('bp1', breakpoint1, 'bp2', breakpoint2);
 
     svg.selectAll('.axis-text')
       .attr('transform', function(d) { return `rotate(${clippedScale1(d)})` });
@@ -377,11 +430,12 @@ function zoomFiltering(divId) {
     /// draw breakpoint
     ticks = [breakpoint1, breakpoint2];
 
-    console.log('ticks:', ticks);
+    // console.log('ticks:', ticks);
     axisLines = gAxis.selectAll('.breakpoint-line')
       .data(ticks, function(d) { return d })
   
     axisLines.exit().remove()
+    console.log('ticks:', ticks);
 
     axisLines.enter()
       .append('g')
